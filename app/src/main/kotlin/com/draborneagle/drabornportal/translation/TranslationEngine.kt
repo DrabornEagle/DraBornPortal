@@ -39,6 +39,10 @@ class TranslationEngine(private val context: Context) : Closeable {
         detected.textBlocks.forEach { block ->
             val bounds = block.boundingBox ?: return@forEach
             val source = normalizeOcr(block.text)
+                .lineSequence()
+                .filterNot { isUiNoise(it) }
+                .joinToString("\n")
+                .trim()
             if (!looksUseful(source)) return@forEach
 
             val protectedText = GameGlossary.protect(source)
@@ -79,6 +83,27 @@ class TranslationEngine(private val context: Context) : Closeable {
         return buildList {
             lines.forEach { line -> if (lastOrNull() != line) add(line) }
         }.joinToString("\n").trim()
+    }
+
+    private fun isUiNoise(text: String): Boolean {
+        val normalized = text.lowercase()
+            .replace(Regex("[^a-z ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (normalized.isBlank()) return true
+
+        val words = normalized.split(" ").filter { it.isNotBlank() }
+        val uiWords = setOf(
+            "quests", "quest", "active", "completed", "map", "skills", "skill",
+            "spell", "book", "journal", "navigate", "set", "unset", "marker",
+            "ping", "move", "zoom", "back", "inventory", "crafting", "settings",
+            "menu", "close", "open", "select", "cancel", "confirm", "x", "a", "b", "l", "r"
+        )
+        if (words.isNotEmpty() && words.size <= 12 && words.all { it in uiWords }) return true
+
+        val mapWords = setOf("valley", "woods", "forest", "river", "lake", "mountain", "mountains")
+        if (words.size in 1..4 && words.lastOrNull() in mapWords) return true
+        return false
     }
 
     private fun looksUseful(text: String): Boolean {
