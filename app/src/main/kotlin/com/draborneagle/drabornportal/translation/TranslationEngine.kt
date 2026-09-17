@@ -47,10 +47,13 @@ class TranslationEngine(private val context: Context) : Closeable {
 
             val protectedText = GameGlossary.protect(source)
             val raw = Tasks.await(translator.translate(protectedText.text))
-            val translated = GameGlossary.restore(raw, protectedText.replacements)
-                .replace(Regex("\\s+([,.!?;:])"), "$1")
-                .replace(Regex("[ \\t]{2,}"), " ")
-                .trim()
+            val translated = polishGameTranslation(
+                source,
+                GameGlossary.restore(raw, protectedText.replacements)
+                    .replace(Regex("\\s+([,.!?;:])"), "$1")
+                    .replace(Regex("[ \\t]{2,}"), " ")
+                    .trim()
+            )
             if (!looksUsefulTranslation(translated)) return@forEach
 
             overlays += TranslationOverlayBlock(
@@ -116,6 +119,22 @@ class TranslationEngine(private val context: Context) : Closeable {
         if (words.isEmpty()) return false
         if (singleLetters > maxOf(3, words.size * 2)) return false
         return letters.toFloat() / compact.length >= 0.55f
+    }
+
+    private fun polishGameTranslation(source: String, fallback: String): String {
+        val key = source.lowercase().replace(Regex("\\s+"), " ").trim()
+        return when {
+            key == "dragon slayer" -> "Ejderha Avcısı"
+            key == "restless ghosts" || key == "restless ghost" -> "Huzursuz Hayaletler"
+            key == "growing pains" -> "Büyüme Sancıları"
+            key.contains("investigate the blue-flame door") && key.contains("swamp") ->
+                "Bataklıktaki mavi alevli kapıyı araştır. Cathan'ın ne yaptığını öğren."
+            key.contains("search for a purpose") && key.contains("amulet of ghostspeak") ->
+                "Ghostspeak Muskasının amacını araştır."
+            key.contains("grow and harvest your first crop") && key.contains("farming plot") ->
+                "Bir tarım alanında ilk mahsulünü yetiştir ve hasat et."
+            else -> fallback
+        }
     }
 
     private fun looksUsefulTranslation(text: String): Boolean {
