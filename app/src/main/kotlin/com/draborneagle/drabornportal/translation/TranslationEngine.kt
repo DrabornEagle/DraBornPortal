@@ -45,8 +45,9 @@ class TranslationEngine(private val context: Context) : Closeable {
             val raw = Tasks.await(translator.translate(protectedText.text))
             val translated = GameGlossary.restore(raw, protectedText.replacements)
                 .replace(Regex("\\s+([,.!?;:])"), "$1")
+                .replace(Regex("[ \\t]{2,}"), " ")
                 .trim()
-            if (translated.isBlank()) return@forEach
+            if (!looksUsefulTranslation(translated)) return@forEach
 
             overlays += TranslationOverlayBlock(
                 left = bounds.left.coerceAtLeast(0),
@@ -58,11 +59,12 @@ class TranslationEngine(private val context: Context) : Closeable {
             )
         }
 
+        val sorted = overlays.sortedWith(compareBy<TranslationOverlayBlock> { it.top }.thenBy { it.left })
         TranslationResult(
-            sourceText = overlays.joinToString("\n") { it.source },
-            translatedText = overlays.joinToString("\n") { it.translated },
-            hadText = overlays.isNotEmpty(),
-            overlays = overlays,
+            sourceText = sorted.joinToString("\n\n") { it.source },
+            translatedText = sorted.joinToString("\n\n") { it.translated },
+            hadText = sorted.isNotEmpty(),
+            overlays = sorted,
             imageWidth = image.width,
             imageHeight = image.height,
         )
@@ -80,12 +82,21 @@ class TranslationEngine(private val context: Context) : Closeable {
     }
 
     private fun looksUseful(text: String): Boolean {
-        if (text.length < 3 || text.length > 1200) return false
+        if (text.length < 3 || text.length > 1100) return false
         val compact = text.filterNot { it.isWhitespace() }
         if (compact.isEmpty()) return false
         val letters = compact.count { it.isLetter() }
-        val latinWords = Regex("[A-Za-z]{2,}").findAll(text).count()
-        return letters.toFloat() / compact.length >= 0.48f && latinWords > 0
+        val words = Regex("[A-Za-z]{2,}").findAll(text).map { it.value }.toList()
+        val singleLetters = Regex("(?<![A-Za-z])[A-Za-z](?![A-Za-z])").findAll(text).count()
+        if (words.isEmpty()) return false
+        if (singleLetters > maxOf(3, words.size * 2)) return false
+        return letters.toFloat() / compact.length >= 0.55f
+    }
+
+    private fun looksUsefulTranslation(text: String): Boolean {
+        if (text.isBlank()) return false
+        val letters = text.count { it.isLetter() }
+        return letters >= 2
     }
 
     override fun close() {
@@ -106,9 +117,10 @@ data class TranslationResult(
 data class ProtectedText(val text: String, val replacements: Map<String, String>)
 
 object GameGlossary {
+    // Yalnızca gerçek özel adları koruyoruz. Görev başlıkları v0.3'te artık Türkçeye çevrilir.
     private val protectedTerms = listOf(
         "PlayStation Portal", "PlayStation", "PSN", "RuneScape", "Dragonwilds",
-        "Dragon Slayer", "Wise Old Man", "Restless Ghost", "Ghostspeak", "Kettan", "Oculus", "Void"
+        "Wise Old Man", "Ghostspeak", "Kettan", "Cathan", "Oculus", "Void"
     ).sortedByDescending { it.length }
 
     fun protect(source: String): ProtectedText {
@@ -116,10 +128,10 @@ object GameGlossary {
         val replacements = linkedMapOf<String, String>()
         protectedTerms.forEachIndexed { index, term ->
             val regex = Regex(Regex.escape(term), RegexOption.IGNORE_CASE)
-            regex.find(output)?.let { match ->
+            regex.find(output)?.let {
                 val token = "QZX${index}ZXQ"
                 output = regex.replace(output, token)
-                replacements[token] = match.value
+                replacements[token] = it.value
             }
         }
         return ProtectedText(output, replacements)
