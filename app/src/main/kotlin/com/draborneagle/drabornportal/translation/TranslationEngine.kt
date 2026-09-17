@@ -68,14 +68,16 @@ class TranslationEngine(private val context: Context) : Closeable {
         )
     }
 
-    private fun normalizeOcr(raw: String): String = raw
-        .replace('\u00A0', ' ')
-        .lineSequence()
-        .map { it.trim().replace(Regex("\\s+"), " ") }
-        .filter { it.isNotBlank() }
-        .distinctUntilChanged()
-        .joinToString("\n")
-        .trim()
+    private fun normalizeOcr(raw: String): String {
+        val lines = raw.replace('\u00A0', ' ')
+            .lineSequence()
+            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .filter { it.isNotBlank() }
+            .toList()
+        return buildList {
+            lines.forEach { line -> if (lastOrNull() != line) add(line) }
+        }.joinToString("\n").trim()
+    }
 
     private fun looksUseful(text: String): Boolean {
         if (text.length < 3 || text.length > 1200) return false
