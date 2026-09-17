@@ -1,4 +1,4 @@
-name: Android v0.4 CI
+name: Android v0.4.1 CI
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DraBornPortal-v0.4-debug
+          name: DraBornPortal-v0.4.1-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
