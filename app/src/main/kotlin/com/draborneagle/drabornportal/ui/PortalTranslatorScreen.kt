@@ -1,8 +1,8 @@
 package com.draborneagle.drabornportal.ui
 
 import android.text.format.DateFormat
-import androidx.activity.compose.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -153,9 +153,7 @@ private fun TranslatorScreen() {
                 )
             }
 
-            item {
-                StatusCard(modelState = modelState, isTranslating = isTranslating)
-            }
+            item { StatusCard(modelState = modelState, isTranslating = isTranslating) }
 
             item {
                 Card(
@@ -175,9 +173,7 @@ private fun TranslatorScreen() {
                         Spacer(Modifier.height(16.dp))
                         Button(
                             enabled = modelState == ModelState.READY && !isTranslating,
-                            onClick = {
-                                picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
-                            },
+                            onClick = { picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(if (isTranslating) "ÇEVRİLİYOR…" else "OYUN EKRAN GÖRÜNTÜSÜ SEÇ")
@@ -193,9 +189,7 @@ private fun TranslatorScreen() {
             }
 
             errorText?.let { message ->
-                item {
-                    Text(message, color = Color(0xFFFFB4AB), fontWeight = FontWeight.SemiBold)
-                }
+                item { Text(message, color = Color(0xFFFFB4AB), fontWeight = FontWeight.SemiBold) }
             }
 
             if (translatedText.isNotBlank()) {
@@ -236,9 +230,7 @@ private fun TranslatorScreen() {
             if (history.isEmpty()) {
                 item { Text("Henüz çeviri yok.", color = PortalMuted) }
             } else {
-                items(history.take(10), key = { it.createdAt }) { item ->
-                    HistoryCard(item)
-                }
+                items(history.take(10), key = { it.createdAt }) { item -> HistoryCard(item) }
             }
 
             item {
