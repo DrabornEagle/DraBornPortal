@@ -30,10 +30,8 @@ class TranslationEngine(private val context: Context) : Closeable {
     )
 
     suspend fun prepareModel(wifiOnly: Boolean = false) = withContext(Dispatchers.IO) {
-        // Gemini 3.1 Flash-Lite ana çeviri motorudur. ML Kit yalnızca ağ yoksa yedek olarak hazırlanır.
-        val builder = DownloadConditions.Builder()
-        if (wifiOnly) builder.requireWifi()
-        runCatching { Tasks.await(fallbackTranslator.downloadModelIfNeeded(builder.build())) }
+        // Gemini ana motordur; uygulama açılışında yerel model indirmesini beklemeyiz.
+        Unit
     }
 
     suspend fun translateScreenshot(uri: Uri): TranslationResult = withContext(Dispatchers.IO) {
@@ -136,6 +134,7 @@ class TranslationEngine(private val context: Context) : Closeable {
 
     private fun translateFallback(source: String): String {
         return runCatching {
+            Tasks.await(fallbackTranslator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
             val protectedText = GameGlossary.protect(source)
             val raw = Tasks.await(fallbackTranslator.translate(protectedText.text))
             GameGlossary.restore(raw, protectedText.replacements)
