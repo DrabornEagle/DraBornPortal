@@ -16,16 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 
-/**
- * Fully local OCR + EN->TR translation pipeline after the ML Kit translation
- * model has been downloaded once. No per-translation paid API is used.
- */
-class TranslationEngine(
-    private val context: Context,
-) : Closeable {
-    private val recognizer: TextRecognizer =
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
+class TranslationEngine(private val context: Context) : Closeable {
+    private val recognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val translator: Translator = Translation.getClient(
         TranslatorOptions.Builder()
             .setSourceLanguage(TranslateLanguage.ENGLISH)
@@ -34,56 +26,64 @@ class TranslationEngine(
     )
 
     suspend fun prepareModel(wifiOnly: Boolean = false) = withContext(Dispatchers.IO) {
-        val conditionsBuilder = DownloadConditions.Builder()
-        if (wifiOnly) conditionsBuilder.requireWifi()
-        Tasks.await(translator.downloadModelIfNeeded(conditionsBuilder.build()))
+        val builder = DownloadConditions.Builder()
+        if (wifiOnly) builder.requireWifi()
+        Tasks.await(translator.downloadModelIfNeeded(builder.build()))
     }
 
     suspend fun translateScreenshot(uri: Uri): TranslationResult = withContext(Dispatchers.IO) {
         val image = InputImage.fromFilePath(context, uri)
         val detected = Tasks.await(recognizer.process(image))
-        val source = normalizeOcr(detected.text)
+        val overlays = mutableListOf<TranslationOverlayBlock>()
 
-        if (source.isBlank()) {
-            return@withContext TranslationResult(
-                sourceText = "",
-                translatedText = "",
-                hadText = false,
+        detected.textBlocks.forEach { block ->
+            val bounds = block.boundingBox ?: return@forEach
+            val source = normalizeOcr(block.text)
+            if (!looksUseful(source)) return@forEach
+
+            val protectedText = GameGlossary.protect(source)
+            val raw = Tasks.await(translator.translate(protectedText.text))
+            val translated = GameGlossary.restore(raw, protectedText.replacements)
+                .replace(Regex("\\s+([,.!?;:])"), "$1")
+                .trim()
+            if (translated.isBlank()) return@forEach
+
+            overlays += TranslationOverlayBlock(
+                left = bounds.left.coerceAtLeast(0),
+                top = bounds.top.coerceAtLeast(0),
+                right = bounds.right.coerceAtLeast(bounds.left + 1),
+                bottom = bounds.bottom.coerceAtLeast(bounds.top + 1),
+                source = source,
+                translated = translated,
             )
         }
 
-        // Translating line-by-line preserves game subtitle / quest UI structure
-        // better than flattening the whole screenshot into one paragraph.
-        val translatedLines = source.lineSequence()
-            .filter { it.isNotBlank() }
-            .map { line ->
-                val protectedLine = GameGlossary.protect(line)
-                val rawTranslation = Tasks.await(translator.translate(protectedLine.text))
-                GameGlossary.restore(rawTranslation, protectedLine.replacements)
-            }
-            .toList()
-
         TranslationResult(
-            sourceText = source,
-            translatedText = translatedLines.joinToString("\n"),
-            hadText = true,
+            sourceText = overlays.joinToString("\n") { it.source },
+            translatedText = overlays.joinToString("\n") { it.translated },
+            hadText = overlays.isNotEmpty(),
+            overlays = overlays,
+            imageWidth = image.width,
+            imageHeight = image.height,
         )
     }
 
-    private fun normalizeOcr(raw: String): String {
-        val normalized = raw
-            .replace('\u00A0', ' ')
-            .lineSequence()
-            .map { it.trim().replace(Regex("\\s+"), " ") }
-            .filter { it.isNotBlank() }
-            .toList()
+    private fun normalizeOcr(raw: String): String = raw
+        .replace('\u00A0', ' ')
+        .lineSequence()
+        .map { it.trim().replace(Regex("\\s+"), " ") }
+        .filter { it.isNotBlank() }
+        .distinctUntilChanged()
+        .joinToString("\n")
+        .trim()
 
-        // Remove immediately repeated OCR lines without reordering screen text.
-        return buildList {
-            normalized.forEach { line ->
-                if (lastOrNull() != line) add(line)
-            }
-        }.joinToString("\n")
+    private fun looksUseful(text: String): Boolean {
+        if (text.length < 3 || text.length > 1200) return false
+        val compact = text.filterNot { it.isWhitespace() }
+        if (compact.isEmpty()) return false
+        val letters = compact.count { it.isLetter() }
+        val latinWords = Regex("[A-Za-z]{2,}").findAll(text).count()
+        return letters.toFloat() / compact.length >= 0.48f && latinWords > 0
     }
 
     override fun close() {
@@ -96,38 +96,28 @@ data class TranslationResult(
     val sourceText: String,
     val translatedText: String,
     val hadText: Boolean,
+    val overlays: List<TranslationOverlayBlock> = emptyList(),
+    val imageWidth: Int = 0,
+    val imageHeight: Int = 0,
 )
 
-data class ProtectedText(
-    val text: String,
-    val replacements: Map<String, String>,
-)
+data class ProtectedText(val text: String, val replacements: Map<String, String>)
 
-/**
- * Protects game/product proper nouns from being mangled by generic translation.
- * Later versions will merge these defaults with a per-game user dictionary.
- */
 object GameGlossary {
     private val protectedTerms = listOf(
-        "PlayStation",
-        "PlayStation Portal",
-        "PSN",
-        "RuneScape",
-        "Dragonwilds",
-        "Oculus",
+        "PlayStation Portal", "PlayStation", "PSN", "RuneScape", "Dragonwilds",
+        "Dragon Slayer", "Wise Old Man", "Restless Ghost", "Ghostspeak", "Kettan", "Oculus", "Void"
     ).sortedByDescending { it.length }
 
     fun protect(source: String): ProtectedText {
         var output = source
         val replacements = linkedMapOf<String, String>()
-
         protectedTerms.forEachIndexed { index, term ->
             val regex = Regex(Regex.escape(term), RegexOption.IGNORE_CASE)
-            if (regex.containsMatchIn(output)) {
+            regex.find(output)?.let { match ->
                 val token = "QZX${index}ZXQ"
-                val actual = regex.find(output)?.value ?: term
                 output = regex.replace(output, token)
-                replacements[token] = actual
+                replacements[token] = match.value
             }
         }
         return ProtectedText(output, replacements)
@@ -137,7 +127,6 @@ object GameGlossary {
         var output = translated
         replacements.forEach { (token, original) ->
             output = output.replace(token, original, ignoreCase = true)
-            // Defensive restore for translators that insert a space around digits.
             val relaxed = token.toCharArray().joinToString("\\s*") { Regex.escape(it.toString()) }
             output = output.replace(Regex(relaxed, RegexOption.IGNORE_CASE), original)
         }
