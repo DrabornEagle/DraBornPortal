@@ -2,12 +2,13 @@ package com.draborneagle.drabornportal.ui
 
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,14 +20,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -42,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,23 +49,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.draborneagle.drabornportal.translation.TranslationEngine
-import com.draborneagle.drabornportal.translation.TranslationHistoryItem
-import com.draborneagle.drabornportal.translation.TranslationHistoryStore
 import com.draborneagle.drabornportal.translation.TranslationOverlayBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Date
+import kotlin.math.sqrt
 
 private val PortalBackground = Color(0xFF080B14)
 private val PortalSurface = Color(0xFF11182A)
@@ -82,21 +85,19 @@ fun DraBornPortalApp(incomingImageUri: Uri? = null) {
 
 @Composable
 private fun TranslatorScreen(incomingImageUri: Uri?) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val engine = remember { TranslationEngine(context.applicationContext) }
-    val historyStore = remember { TranslationHistoryStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
     var modelState by remember { mutableStateOf(ModelState.PREPARING) }
     var isTranslating by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
-    var history by remember { mutableStateOf(historyStore.load()) }
     var screenshot by remember { mutableStateOf<ImageBitmap?>(null) }
     var overlays by remember { mutableStateOf<List<TranslationOverlayBlock>>(emptyList()) }
     var imageWidth by remember { mutableStateOf(0) }
     var imageHeight by remember { mutableStateOf(0) }
-    var sourceText by remember { mutableStateOf("") }
     var translatedText by remember { mutableStateOf("") }
     var showOriginal by remember { mutableStateOf(false) }
+    var showFullscreen by remember { mutableStateOf(false) }
     var lastIncoming by remember { mutableStateOf<String?>(null) }
 
     suspend fun prepareModel() {
@@ -116,6 +117,7 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
             isTranslating = true
             errorText = null
             showOriginal = false
+            showFullscreen = false
             runCatching {
                 val bitmap = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
@@ -127,10 +129,8 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                 imageWidth = result.imageWidth.takeIf { it > 0 } ?: bitmap.width
                 imageHeight = result.imageHeight.takeIf { it > 0 } ?: bitmap.height
                 overlays = result.overlays
-                sourceText = result.sourceText
                 translatedText = result.translatedText
-                if (result.hadText) history = historyStore.add(result.sourceText, result.translatedText)
-                else errorText = "Bu görüntüde çevrilebilir İngilizce metin bulunamadı."
+                if (!result.hadText) errorText = "Bu görüntüde çevrilebilir İngilizce metin bulunamadı."
             }.onFailure {
                 errorText = "Görüntü çevrilemedi: ${it.message ?: "Bilinmeyen hata"}"
             }
@@ -171,10 +171,10 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(22.dp)
                 ) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("v0.2 • Görüntü üstü çeviri", color = PortalBlue, fontWeight = FontWeight.Bold)
+                        Text("v0.2 • Tam ekran görüntü çevirisi", color = PortalBlue, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsü seç veya PlayStation App'te Yakalananlar → Paylaş → DraBornPortal de. Türkçe, oyundaki İngilizce metnin bulunduğu yere yazılır.",
+                            "Ekran görüntüsünü seç veya PlayStation App'te Yakalananlar → Paylaş → DraBornPortal de. Ana ekranda görüntü temiz kalır; görüntüye dokununca Türkçe çeviri tam ekranda açılır.",
                             color = PortalText, fontSize = 16.sp, lineHeight = 23.sp
                         )
                         Spacer(Modifier.height(16.dp))
@@ -195,34 +195,40 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
 
             if (screenshot != null && imageWidth > 0 && imageHeight > 0) {
                 item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column {
-                            Text("OYUN GÖRÜNTÜSÜ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                            Text("${overlays.size} metin bölgesi çevrildi", color = PortalMuted, fontSize = 12.sp)
-                        }
-                        TextButton(onClick = { showOriginal = !showOriginal }) {
-                            Text(if (showOriginal) "TÜRKÇEYİ GÖSTER" else "ORİJİNALİ GÖSTER")
-                        }
+                    Column {
+                        Text("OYUN GÖRÜNTÜSÜ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("${overlays.size} metin bölgesi çevrildi • Tam ekran çeviri için görüntüye dokun", color = PortalMuted, fontSize = 12.sp)
                     }
                 }
                 item {
-                    OverlayScreenshot(
+                    OriginalScreenshotPreview(
                         bitmap = screenshot!!,
                         imageWidth = imageWidth,
                         imageHeight = imageHeight,
-                        blocks = if (showOriginal) emptyList() else overlays
+                        onClick = { showFullscreen = true }
                     )
                 }
             }
 
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("GEÇMİŞ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                    if (history.isNotEmpty()) TextButton(onClick = { historyStore.clear(); history = emptyList() }) { Text("Temizle") }
+                Text("ÇEVİRİ METNİ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text("Görüntüde bulunan Türkçe çevirinin düz metin hali", color = PortalMuted, fontSize = 12.sp)
+            }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1321)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(
+                        text = translatedText.ifBlank { "Henüz çeviri yok." },
+                        color = if (translatedText.isBlank()) PortalMuted else PortalText,
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        modifier = Modifier.padding(16.dp)
+                    )
                 }
             }
-            if (history.isEmpty()) item { Text("Henüz çeviri yok.", color = PortalMuted) }
-            else items(history.take(10), key = { it.createdAt }) { item -> HistoryCard(item) }
 
             item {
                 HorizontalDivider(color = Color(0xFF26314A))
@@ -234,27 +240,167 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
             }
         }
     }
+
+    if (showFullscreen && screenshot != null && imageWidth > 0 && imageHeight > 0) {
+        FullscreenTranslationViewer(
+            bitmap = screenshot!!,
+            imageWidth = imageWidth,
+            imageHeight = imageHeight,
+            blocks = if (showOriginal) emptyList() else overlays,
+            showOriginal = showOriginal,
+            onToggleOriginal = { showOriginal = !showOriginal },
+            onDismiss = { showFullscreen = false }
+        )
+    }
 }
 
 @Composable
-private fun OverlayScreenshot(bitmap: ImageBitmap, imageWidth: Int, imageHeight: Int, blocks: List<TranslationOverlayBlock>) {
+private fun OriginalScreenshotPreview(
+    bitmap: ImageBitmap,
+    imageWidth: Int,
+    imageHeight: Int,
+    onClick: () -> Unit
+) {
     val ratio = imageWidth.toFloat() / imageHeight.toFloat()
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(18.dp)).background(Color.Black)
+    Box(
+        modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(18.dp))
+            .background(Color.Black).clickable(onClick = onClick)
     ) {
-        Image(bitmap = bitmap, contentDescription = "Oyun ekran görüntüsü", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+        Image(
+            bitmap = bitmap,
+            contentDescription = "Oyun ekran görüntüsü - tam ekran aç",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillBounds
+        )
+        Text(
+            "TAM EKRAN ÇEVİRİ • DOKUN",
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black,
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .background(Color(0xCC0B1020), RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                .padding(horizontal = 14.dp, vertical = 7.dp)
+        )
+    }
+}
+
+@Composable
+private fun FullscreenTranslationViewer(
+    bitmap: ImageBitmap,
+    imageWidth: Int,
+    imageHeight: Int,
+    blocks: List<TranslationOverlayBlock>,
+    showOriginal: Boolean,
+    onToggleOriginal: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF03050A)) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().background(Color(0xF20B1020)).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onDismiss) { Text("KAPAT") }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TAM EKRAN ÇEVİRİ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                        Text("İki parmakla yakınlaştır • sürükleyerek gez", color = PortalMuted, fontSize = 10.sp)
+                    }
+                    TextButton(onClick = onToggleOriginal) {
+                        Text(if (showOriginal) "TÜRKÇE" else "ORİJİNAL")
+                    }
+                }
+                ZoomableOverlayScreenshot(
+                    bitmap = bitmap,
+                    imageWidth = imageWidth,
+                    imageHeight = imageHeight,
+                    blocks = blocks,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoomableOverlayScreenshot(
+    bitmap: ImageBitmap,
+    imageWidth: Int,
+    imageHeight: Int,
+    blocks: List<TranslationOverlayBlock>,
+    modifier: Modifier = Modifier
+) {
+    var scale by remember(bitmap) { mutableFloatStateOf(1f) }
+    var pan by remember(bitmap) { mutableStateOf(Offset.Zero) }
+    val ratio = imageWidth.toFloat() / imageHeight.toFloat()
+
+    BoxWithConstraints(
+        modifier = modifier.background(Color.Black).pointerInput(bitmap) {
+            detectTransformGestures { _, gesturePan, gestureZoom, _ ->
+                val nextScale = (scale * gestureZoom).coerceIn(1f, 8f)
+                scale = nextScale
+                pan = if (nextScale <= 1.01f) Offset.Zero else pan + gesturePan
+            }
+        },
+        contentAlignment = Alignment.Center
+    ) {
+        val containerRatio = if (maxHeight.value > 0f) maxWidth.value / maxHeight.value else ratio
+        val fittedWidth = if (containerRatio > ratio) maxHeight * ratio else maxWidth
+        val fittedHeight = if (containerRatio > ratio) maxHeight else maxWidth / ratio
+
+        Box(
+            modifier = Modifier.width(fittedWidth).height(fittedHeight).graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = pan.x
+                translationY = pan.y
+            }
+        ) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = "Yakınlaştırılabilir oyun ekran görüntüsü",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds
+            )
+            TranslationOverlayLayer(imageWidth, imageHeight, blocks)
+        }
+    }
+}
+
+@Composable
+private fun TranslationOverlayLayer(
+    imageWidth: Int,
+    imageHeight: Int,
+    blocks: List<TranslationOverlayBlock>
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         blocks.forEach { block ->
             val x = maxWidth * (block.left.toFloat() / imageWidth)
             val y = maxHeight * (block.top.toFloat() / imageHeight)
             val w = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
-            val rawHeight = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
-            val boxHeight = if (rawHeight < 24.dp) 24.dp else rawHeight
-            val textSize = if ((block.bottom - block.top) > 80) 14.sp else 11.sp
+            val h = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
+            val chars = block.translated.length.coerceAtLeast(1)
+            val fittedSp = sqrt(((w.value.coerceAtLeast(6f) * h.value.coerceAtLeast(6f)) / chars) * 1.55f)
+                .coerceIn(5.5f, 13f).sp
+
             Box(
-                modifier = Modifier.offset(x, y).width(w).heightIn(min = boxHeight)
-                    .background(Color(0xE9141B2A), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp)
+                modifier = Modifier.offset(x, y).width(w).height(h)
+                    .background(Color(0xDC11182A), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 2.dp, vertical = 1.dp)
             ) {
-                Text(block.translated, color = Color.White, fontWeight = FontWeight.Bold, fontSize = textSize, lineHeight = textSize * 1.12f)
+                Text(
+                    text = block.translated,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fittedSp,
+                    lineHeight = fittedSp,
+                    maxLines = 6,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -269,20 +415,18 @@ private fun StatusCard(modelState: ModelState, isTranslating: Boolean) {
         else -> "Çeviri modeli hazır değil" to Color(0xFFFFB4AB)
     }
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1B2D)), shape = RoundedCornerShape(18.dp)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (modelState == ModelState.PREPARING || isTranslating) CircularProgressIndicator(modifier = Modifier.height(24.dp), strokeWidth = 3.dp)
-            Column { Text(label, color = PortalText, fontWeight = FontWeight.Bold); Text("Ücretli çeviri API'si: 0 TL", color = accent, fontSize = 13.sp) }
-        }
-    }
-}
-
-@Composable
-private fun HistoryCard(item: TranslationHistoryItem) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1321)), shape = RoundedCornerShape(16.dp)) {
-        Column(Modifier.padding(14.dp)) {
-            Text(DateFormat.getTimeFormat(LocalContext.current).format(Date(item.createdAt)), color = PortalBlue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(5.dp))
-            Text(item.translated, color = PortalText, fontWeight = FontWeight.SemiBold, maxLines = 4)
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (modelState == ModelState.PREPARING || isTranslating) {
+                CircularProgressIndicator(modifier = Modifier.height(24.dp), strokeWidth = 3.dp)
+            }
+            Column {
+                Text(label, color = PortalText, fontWeight = FontWeight.Bold)
+                Text("Ücretli çeviri API'si: 0 TL", color = accent, fontSize = 13.sp)
+            }
         }
     }
 }
