@@ -5,8 +5,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,14 +71,17 @@ import com.draborneagle.drabornportal.translation.TranslationOverlayBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.sqrt
 
-private val PortalBackground = Color(0xFF080B14)
-private val PortalSurface = Color(0xFF11182A)
-private val PortalBlue = Color(0xFF36A7FF)
-private val PortalCyan = Color(0xFF4EF2D1)
-private val PortalText = Color(0xFFF5F8FF)
-private val PortalMuted = Color(0xFFA9B3C9)
+private val PortalBackground = Color(0xFF050816)
+private val PortalSurface = Color(0xFF10182D)
+private val PortalSurface2 = Color(0xFF151F3B)
+private val PortalBlue = Color(0xFF35A7FF)
+private val PortalCyan = Color(0xFF45F2D0)
+private val PortalPurple = Color(0xFF8D5CFF)
+private val PortalPink = Color(0xFFFF5EC4)
+private val PortalGold = Color(0xFFFFCF5A)
+private val PortalText = Color(0xFFF7F9FF)
+private val PortalMuted = Color(0xFFAEB9D6)
 private enum class ModelState { PREPARING, READY, ERROR }
 
 @Composable
@@ -151,39 +157,48 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
 
     Box(
         modifier = Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFF071020), PortalBackground, Color(0xFF0B1020)))
+            Brush.verticalGradient(
+                listOf(Color(0xFF07152D), PortalBackground, Color(0xFF130B29), Color(0xFF07111E))
+            )
         )
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
-            contentPadding = PaddingValues(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 30.sp)
-                Text("PLAY • CAPTURE • TÜRKÇE", color = PortalCyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
+            item { HeroHeader() }
             item { StatusCard(modelState, isTranslating) }
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = PortalSurface),
-                    shape = RoundedCornerShape(22.dp)
+                    modifier = Modifier.fillMaxWidth().border(
+                        BorderStroke(1.dp, Color(0x5535A7FF)), RoundedCornerShape(26.dp)
+                    ),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xE6111930)),
+                    shape = RoundedCornerShape(26.dp)
                 ) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("v0.2 • Tam ekran görüntü çevirisi", color = PortalBlue, fontWeight = FontWeight.Bold)
+                    Column(Modifier.padding(20.dp)) {
+                        Text("v0.3 • Akıllı oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsünü seç veya PlayStation App'te Yakalananlar → Paylaş → DraBornPortal de. Ana ekranda görüntü temiz kalır; görüntüye dokununca Türkçe çeviri tam ekranda açılır.",
-                            color = PortalText, fontSize = 16.sp, lineHeight = 23.sp
+                            "Ekran görüntüsünü seç. Çeviri tamamlanınca görsele dokun; Türkçe metinler artık daha büyük, yüksek kontrastlı kartlarla açılır. İki parmakla yakınlaştırıp gezebilirsin.",
+                            color = PortalText, fontSize = 16.sp, lineHeight = 24.sp
                         )
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(18.dp))
                         Button(
                             enabled = modelState == ModelState.READY && !isTranslating,
                             onClick = { picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (isTranslating) "ÇEVRİLİYOR…" else "OYUN EKRAN GÖRÜNTÜSÜ SEÇ") }
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PortalPurple,
+                                disabledContainerColor = Color(0xFF29304B)
+                            ),
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Text(if (isTranslating) "METİNLER OKUNUYOR…" else "OYUN GÖRÜNTÜSÜ SEÇ", fontWeight = FontWeight.Black)
+                        }
                         if (modelState == ModelState.ERROR) {
+                            Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = { scope.launch { prepareModel() } }, modifier = Modifier.fillMaxWidth()) {
                                 Text("MODELİ TEKRAR HAZIRLA")
                             }
@@ -191,14 +206,22 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     }
                 }
             }
-            errorText?.let { message -> item { Text(message, color = Color(0xFFFFB4AB), fontWeight = FontWeight.SemiBold) } }
+
+            errorText?.let { message ->
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3A1727)), shape = RoundedCornerShape(16.dp)) {
+                        Text(message, color = Color(0xFFFFB7C9), fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(14.dp))
+                    }
+                }
+            }
 
             if (screenshot != null && imageWidth > 0 && imageHeight > 0) {
                 item {
-                    Column {
-                        Text("OYUN GÖRÜNTÜSÜ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                        Text("${overlays.size} metin bölgesi çevrildi • Tam ekran çeviri için görüntüye dokun", color = PortalMuted, fontSize = 12.sp)
-                    }
+                    SectionTitle(
+                        title = "OYUN GÖRÜNTÜSÜ",
+                        subtitle = "${overlays.size} metin bölgesi çevrildi",
+                        action = "TAM EKRAN • DOKUN"
+                    )
                 }
                 item {
                     OriginalScreenshotPreview(
@@ -211,30 +234,20 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
             }
 
             item {
-                Text("ÇEVİRİ METNİ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                Text("Görüntüde bulunan Türkçe çevirinin düz metin hali", color = PortalMuted, fontSize = 12.sp)
+                SectionTitle(
+                    title = "TÜRKÇE METİNLER",
+                    subtitle = "Görüntüde okunan metinlerin sade ve okunabilir çevirisi",
+                    action = null
+                )
             }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1321)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = translatedText.ifBlank { "Henüz çeviri yok." },
-                        color = if (translatedText.isBlank()) PortalMuted else PortalText,
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
+            item { TranslationTextCard(translatedText) }
 
             item {
-                HorizontalDivider(color = Color(0xFF26314A))
-                Spacer(Modifier.height(6.dp))
+                HorizontalDivider(color = Color(0xFF253456))
+                Spacer(Modifier.height(8.dp))
+                Text("PSN GÜVENLİ MOD", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 12.sp)
                 Text(
-                    "PSN güvenli modu: Sony hesabı veya tokenı DraBornPortal'a verilmez. PlayStation App'in resmi Paylaş akışı kullanılır.",
+                    "Sony hesabı veya tokenı DraBornPortal'a verilmez. PlayStation App'in resmi Paylaş akışı kullanılır.",
                     color = PortalMuted, fontSize = 13.sp, lineHeight = 19.sp
                 )
             }
@@ -255,31 +268,104 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
 }
 
 @Composable
-private fun OriginalScreenshotPreview(
-    bitmap: ImageBitmap,
-    imageWidth: Int,
-    imageHeight: Int,
-    onClick: () -> Unit
-) {
+private fun HeroHeader() {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 32.sp)
+            Text(
+                "v0.3",
+                color = Color(0xFF08101E),
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+                modifier = Modifier.background(
+                    Brush.horizontalGradient(listOf(PortalCyan, PortalBlue)), RoundedCornerShape(999.dp)
+                ).padding(horizontal = 9.dp, vertical = 5.dp)
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("PLAY • CAPTURE • TÜRKÇE", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            MiniChip("CİHAZ İÇİ OCR", PortalBlue)
+            MiniChip("0 TL API", PortalCyan)
+            MiniChip("EN → TR", PortalPink)
+        }
+    }
+}
+
+@Composable
+private fun MiniChip(text: String, accent: Color) {
+    Text(
+        text,
+        color = accent,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Black,
+        modifier = Modifier.background(accent.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
+            .padding(horizontal = 9.dp, vertical = 6.dp)
+    )
+}
+
+@Composable
+private fun SectionTitle(title: String, subtitle: String, action: String?) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = PortalText, fontWeight = FontWeight.Black, fontSize = 19.sp)
+            Text(subtitle, color = PortalMuted, fontSize = 12.sp, lineHeight = 17.sp)
+        }
+        if (action != null) {
+            Text(action, color = PortalBlue, fontWeight = FontWeight.Black, fontSize = 11.sp, modifier = Modifier.padding(start = 10.dp, top = 3.dp))
+        }
+    }
+}
+
+@Composable
+private fun TranslationTextCard(translatedText: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth().border(1.dp, Color(0x3345F2D0), RoundedCornerShape(22.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xE60D1428)),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.width(4.dp).height(20.dp).background(PortalCyan, RoundedCornerShape(9.dp)))
+                Text(if (translatedText.isBlank()) "Çeviri bekleniyor" else "Okunabilir metin görünümü", color = PortalCyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = translatedText.ifBlank { "Henüz çeviri yok." },
+                color = if (translatedText.isBlank()) PortalMuted else PortalText,
+                fontSize = 17.sp,
+                lineHeight = 27.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun OriginalScreenshotPreview(bitmap: ImageBitmap, imageWidth: Int, imageHeight: Int, onClick: () -> Unit) {
     val ratio = imageWidth.toFloat() / imageHeight.toFloat()
     Box(
-        modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(18.dp))
+        modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(22.dp))
+            .border(1.dp, Color(0x5535A7FF), RoundedCornerShape(22.dp))
             .background(Color.Black).clickable(onClick = onClick)
     ) {
-        Image(
-            bitmap = bitmap,
-            contentDescription = "Oyun ekran görüntüsü - tam ekran aç",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.FillBounds
+        Image(bitmap = bitmap, contentDescription = "Oyun ekran görüntüsü", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent, Color(0xB8050816)))
+            )
         )
         Text(
-            "TAM EKRAN ÇEVİRİ • DOKUN",
+            "TAM EKRAN TÜRKÇE ÇEVİRİ  ›",
             color = Color.White,
             fontSize = 11.sp,
             fontWeight = FontWeight.Black,
             modifier = Modifier.align(Alignment.BottomCenter)
-                .background(Color(0xCC0B1020), RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-                .padding(horizontal = 14.dp, vertical = 7.dp)
+                .background(Brush.horizontalGradient(listOf(Color(0xE68D5CFF), Color(0xE635A7FF))), RoundedCornerShape(999.dp))
+                .padding(horizontal = 15.dp, vertical = 8.dp)
+                .offset(y = (-10).dp)
         )
     }
 }
@@ -294,33 +380,41 @@ private fun FullscreenTranslationViewer(
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF03050A)) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF02040B)) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Row(
-                    Modifier.fillMaxWidth().background(Color(0xF20B1020)).padding(horizontal = 12.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().background(
+                        Brush.horizontalGradient(listOf(Color(0xFF11172B), Color(0xFF17102E), Color(0xFF0B1D31)))
+                    ).padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    TextButton(onClick = onDismiss) { Text("KAPAT") }
+                    TextButton(onClick = onDismiss) { Text("KAPAT", color = PortalBlue, fontWeight = FontWeight.Black, fontSize = 11.sp) }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TAM EKRAN ÇEVİRİ", color = PortalText, fontWeight = FontWeight.Black, fontSize = 14.sp)
-                        Text("İki parmakla yakınlaştır • sürükleyerek gez", color = PortalMuted, fontSize = 10.sp)
+                        Text(if (showOriginal) "ORİJİNAL GÖRÜNTÜ" else "AKILLI TÜRKÇE KATMAN", color = PortalText, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                        Text("Yakınlaştır • sürükle • metinleri rahat oku", color = PortalMuted, fontSize = 9.sp)
                     }
                     TextButton(onClick = onToggleOriginal) {
-                        Text(if (showOriginal) "TÜRKÇE" else "ORİJİNAL")
+                        Text(if (showOriginal) "TÜRKÇE" else "ORİJİNAL", color = if (showOriginal) PortalCyan else PortalGold, fontWeight = FontWeight.Black, fontSize = 11.sp)
                     }
                 }
-                ZoomableOverlayScreenshot(
-                    bitmap = bitmap,
-                    imageWidth = imageWidth,
-                    imageHeight = imageHeight,
-                    blocks = blocks,
-                    modifier = Modifier.fillMaxSize()
-                )
+                Box(Modifier.fillMaxSize()) {
+                    ZoomableOverlayScreenshot(bitmap, imageWidth, imageHeight, blocks, Modifier.fillMaxSize())
+                    if (!showOriginal && blocks.isNotEmpty()) {
+                        Text(
+                            "${blocks.size} ÇEVİRİ • Kartlar okunabilir boyuta otomatik büyütüldü",
+                            color = PortalCyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                                .padding(bottom = 14.dp)
+                                .background(Color(0xE60B1426), RoundedCornerShape(999.dp))
+                                .border(1.dp, Color(0x5545F2D0), RoundedCornerShape(999.dp))
+                                .padding(horizontal = 13.dp, vertical = 7.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -360,45 +454,39 @@ private fun ZoomableOverlayScreenshot(
                 translationY = pan.y
             }
         ) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = "Yakınlaştırılabilir oyun ekran görüntüsü",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.FillBounds
-            )
-            TranslationOverlayLayer(imageWidth, imageHeight, blocks)
+            Image(bitmap = bitmap, contentDescription = "Yakınlaştırılabilir oyun ekran görüntüsü", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+            if (blocks.isNotEmpty()) {
+                Box(Modifier.fillMaxSize().background(Color(0x26000000)))
+                TranslationOverlayLayer(imageWidth, imageHeight, blocks)
+            }
         }
     }
 }
 
 @Composable
-private fun TranslationOverlayLayer(
-    imageWidth: Int,
-    imageHeight: Int,
-    blocks: List<TranslationOverlayBlock>
-) {
+private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: List<TranslationOverlayBlock>) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        blocks.forEach { block ->
-            val x = maxWidth * (block.left.toFloat() / imageWidth)
-            val y = maxHeight * (block.top.toFloat() / imageHeight)
-            val w = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
-            val h = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
-            val chars = block.translated.length.coerceAtLeast(1)
-            val fittedSp = sqrt(((w.value.coerceAtLeast(6f) * h.value.coerceAtLeast(6f)) / chars) * 1.55f)
-                .coerceIn(5.5f, 13f).sp
+        blocks.forEachIndexed { index, block ->
+            val rawX = maxWidth * (block.left.toFloat() / imageWidth)
+            val rawY = maxHeight * (block.top.toFloat() / imageHeight)
+            val originalWidth = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
+            val readableWidth = maxOf(originalWidth, maxWidth * 0.46f).coerceAtMost(maxWidth * 0.72f)
+            val safeX = rawX.coerceAtMost((maxWidth - readableWidth).coerceAtLeast(0.dp))
 
-            Box(
-                modifier = Modifier.offset(x, y).width(w).height(h)
-                    .background(Color(0xDC11182A), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 2.dp, vertical = 1.dp)
+            Column(
+                modifier = Modifier.offset(safeX, rawY)
+                    .width(readableWidth)
+                    .background(Color(0xF20C1428), RoundedCornerShape(8.dp))
+                    .border(1.dp, if (index % 2 == 0) Color(0x9935A7FF) else Color(0x9945F2D0), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 7.dp, vertical = 5.dp)
             ) {
                 Text(
                     text = block.translated,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = fittedSp,
-                    lineHeight = fittedSp,
-                    maxLines = 6,
+                    fontSize = 12.5.sp,
+                    lineHeight = 15.5.sp,
+                    maxLines = 5,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -408,25 +496,25 @@ private fun TranslationOverlayLayer(
 
 @Composable
 private fun StatusCard(modelState: ModelState, isTranslating: Boolean) {
-    val (label, accent) = when {
-        isTranslating -> "Metin bölgeleri okunuyor ve çevriliyor" to PortalCyan
-        modelState == ModelState.PREPARING -> "İngilizce → Türkçe modeli hazırlanıyor" to PortalBlue
-        modelState == ModelState.READY -> "Yerel çeviri motoru hazır" to PortalCyan
-        else -> "Çeviri modeli hazır değil" to Color(0xFFFFB4AB)
+    val (label, detail, accent) = when {
+        isTranslating -> Triple("Oyun metinleri taranıyor", "OCR + Türkçe çeviri çalışıyor", PortalCyan)
+        modelState == ModelState.PREPARING -> Triple("Çeviri motoru hazırlanıyor", "İngilizce → Türkçe cihaz içi model", PortalBlue)
+        modelState == ModelState.READY -> Triple("Çeviri motoru hazır", "Görsel seç ve hemen Türkçeleştir", PortalCyan)
+        else -> Triple("Çeviri modeli hazır değil", "Tekrar hazırlamayı dene", Color(0xFFFF8AAE))
     }
-    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1B2D)), shape = RoundedCornerShape(18.dp)) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (modelState == ModelState.PREPARING || isTranslating) {
-                CircularProgressIndicator(modifier = Modifier.height(24.dp), strokeWidth = 3.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth().border(1.dp, accent.copy(alpha = 0.3f), RoundedCornerShape(20.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xE60D1A31)),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (modelState == ModelState.PREPARING || isTranslating) CircularProgressIndicator(modifier = Modifier.width(26.dp).height(26.dp), strokeWidth = 3.dp, color = accent)
+            else Box(Modifier.width(10.dp).height(10.dp).background(accent, RoundedCornerShape(999.dp)))
+            Column(Modifier.weight(1f)) {
+                Text(label, color = PortalText, fontWeight = FontWeight.Black, fontSize = 15.sp)
+                Text(detail, color = PortalMuted, fontSize = 12.sp)
             }
-            Column {
-                Text(label, color = PortalText, fontWeight = FontWeight.Bold)
-                Text("Ücretli çeviri API'si: 0 TL", color = accent, fontSize = 13.sp)
-            }
+            Text("0 TL", color = accent, fontWeight = FontWeight.Black, fontSize = 13.sp)
         }
     }
 }
