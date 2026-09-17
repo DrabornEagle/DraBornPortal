@@ -539,8 +539,10 @@ private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: L
             val titleLike = block.source.length <= 42 && !block.source.contains(".") && !block.source.contains("?")
             val widthFactor = if (titleLike) lengthRatio.coerceIn(1.08f, 1.48f) else 1.08f
             val heightFactor = if (titleLike) 1.55f else lengthRatio.coerceIn(1.18f, 1.65f)
-            val w = (originalW * widthFactor).coerceAtMost((maxWidth - x).coerceAtLeast(originalW))
-            val h = (originalH * heightFactor).coerceAtMost((maxHeight - y).coerceAtLeast(originalH))
+            val availableW = (maxWidth - x).coerceAtLeast(1.dp)
+            val availableH = (maxHeight - y).coerceAtLeast(1.dp)
+            val w = (originalW * widthFactor).coerceAtMost(availableW)
+            val h = (originalH * heightFactor).coerceAtMost(availableH)
             AutoFitTranslationBlock(
                 text = block.translated,
                 modifier = Modifier.offset(x, y).width(w).height(h)
