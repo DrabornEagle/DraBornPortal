@@ -5,6 +5,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -55,9 +61,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +75,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.draborneagle.drabornportal.translation.TranslationEngine
 import com.draborneagle.drabornportal.translation.TranslationOverlayBlock
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,7 +93,64 @@ private enum class ModelState { PREPARING, READY, ERROR }
 
 @Composable
 fun DraBornPortalApp(incomingImageUri: Uri? = null) {
-    MaterialTheme { Surface(color = PortalBackground) { TranslatorScreen(incomingImageUri) } }
+    var splashVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(1650)
+        splashVisible = false
+    }
+    MaterialTheme {
+        Surface(color = PortalBackground) {
+            if (splashVisible) PortalAnimatedSplash() else TranslatorScreen(incomingImageUri)
+        }
+    }
+}
+
+@Composable
+private fun PortalAnimatedSplash() {
+    val transition = rememberInfiniteTransition(label = "portalSplash")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
+        label = "portalRotation"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+        label = "portalPulse"
+    )
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(
+            Brush.radialGradient(listOf(Color(0xFF173C72), Color(0xFF10092B), PortalBackground))
+        ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.width(116.dp).height(116.dp)
+                        .graphicsLayer { rotationZ = rotation; alpha = 0.82f }
+                        .border(4.dp, PortalCyan, RoundedCornerShape(34.dp))
+                )
+                Box(
+                    Modifier.width(86.dp).height(86.dp)
+                        .graphicsLayer { scaleX = pulse; scaleY = pulse }
+                        .background(Brush.linearGradient(listOf(PortalPurple, PortalBlue)), RoundedCornerShape(27.dp))
+                        .border(2.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(27.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("DP", color = Color.White, fontWeight = FontWeight.Black, fontSize = 28.sp)
+                }
+            }
+            Spacer(Modifier.height(28.dp))
+            Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 30.sp)
+            Text("OYUN EKRANI TÜRKÇELEŞTİRİLİYOR", color = PortalCyan, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Spacer(Modifier.height(22.dp))
+            CircularProgressIndicator(color = PortalCyan, strokeWidth = 3.dp, modifier = Modifier.width(32.dp).height(32.dp))
+        }
+    }
 }
 
 @Composable
@@ -178,10 +242,10 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text("v0.3.2 • Hassas oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("v0.4 • Gemini oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsünü seç. Çeviri tamamlanınca Türkçe metinler orijinal yazının bulunduğu alanın tam üzerine, aynı ölçülere yakın biçimde yerleşir. Gereksiz menü ve kontrol yazıları filtrelenir.",
+                            "Ekran görüntüsünü seç. Metin konumlarını cihaz içi OCR bulur; Gemini 3.1 Flash-Lite görevleri bağlama uygun Türkçeye tek seferde çevirir. Gereksiz menü ve kontrol yazıları filtrelenir.",
                             color = PortalText, fontSize = 16.sp, lineHeight = 24.sp
                         )
                         Spacer(Modifier.height(18.dp))
@@ -273,7 +337,7 @@ private fun HeroHeader() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 32.sp)
             Text(
-                "v0.3.2",
+                "v0.4",
                 color = Color(0xFF08101E),
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
@@ -287,7 +351,7 @@ private fun HeroHeader() {
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             MiniChip("CİHAZ İÇİ OCR", PortalBlue)
-            MiniChip("0 TL API", PortalCyan)
+            MiniChip("GEMINI 3.1", PortalCyan)
             MiniChip("EN → TR", PortalPink)
         }
     }
@@ -365,7 +429,6 @@ private fun OriginalScreenshotPreview(bitmap: ImageBitmap, imageWidth: Int, imag
             modifier = Modifier.align(Alignment.BottomCenter)
                 .background(Brush.horizontalGradient(listOf(Color(0xE68D5CFF), Color(0xE635A7FF))), RoundedCornerShape(999.dp))
                 .padding(horizontal = 15.dp, vertical = 8.dp)
-                .offset(y = (-10).dp)
         )
     }
 }
@@ -524,7 +587,7 @@ private fun StatusCard(modelState: ModelState, isTranslating: Boolean) {
                 Text(label, color = PortalText, fontWeight = FontWeight.Black, fontSize = 15.sp)
                 Text(detail, color = PortalMuted, fontSize = 12.sp)
             }
-            Text("0 TL", color = accent, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Text("GEMINI", color = accent, fontWeight = FontWeight.Black, fontSize = 11.sp)
         }
     }
 }
