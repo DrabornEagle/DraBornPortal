@@ -11,14 +11,29 @@ android {
         applicationId = "com.draborneagle.drabornportal"
         minSdk = 23
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.3.2"
+        versionCode = 1
+        versionName = "0.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("dkdRelease") {
+            val dkdStorePath = System.getenv("DKD_KEYSTORE_PATH")
+            if (!dkdStorePath.isNullOrBlank()) {
+                storeFile = file(dkdStorePath)
+                storePassword = System.getenv("DKD_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("DKD_ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("DKD_ANDROID_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (!System.getenv("DKD_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("dkdRelease")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
