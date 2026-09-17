@@ -178,7 +178,7 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text("v0.3.1 • Hassas oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("v0.3.2 • Hassas oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "Ekran görüntüsünü seç. Çeviri tamamlanınca Türkçe metinler orijinal yazının bulunduğu alanın tam üzerine, aynı ölçülere yakın biçimde yerleşir. Gereksiz menü ve kontrol yazıları filtrelenir.",
@@ -273,7 +273,7 @@ private fun HeroHeader() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 32.sp)
             Text(
-                "v0.3.1",
+                "v0.3.2",
                 color = Color(0xFF08101E),
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
@@ -403,7 +403,7 @@ private fun FullscreenTranslationViewer(
                     ZoomableOverlayScreenshot(bitmap, imageWidth, imageHeight, blocks, Modifier.fillMaxSize())
                     if (!showOriginal && blocks.isNotEmpty()) {
                         Text(
-                            "${blocks.size} ÇEVİRİ • Metinler orijinal alanların üzerine yerleştirildi",
+                            "${blocks.size} ÇEVİRİ • Metin boyutu kutuya otomatik sığdırıldı",
                             color = PortalCyan,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -470,32 +470,37 @@ private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: L
             val y = maxHeight * (block.top.toFloat() / imageHeight)
             val w = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
             val h = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
-            val chars = block.translated.length.coerceAtLeast(1)
-            val area = w.value.coerceAtLeast(2f) * h.value.coerceAtLeast(2f)
-            val byArea = kotlin.math.sqrt((area / chars) * 1.18f)
-            val byHeight = (h.value * 0.52f).coerceAtLeast(3.2f)
-            val fittedValue = minOf(byArea, byHeight, 11f).coerceAtLeast(3.2f)
-            val fittedSp = fittedValue.sp
-
-            Box(
-                modifier = Modifier.offset(x, y)
-                    .width(w)
-                    .height(h)
-                    .background(Color(0xEA08101F), RoundedCornerShape(2.dp))
-                    .border(0.5.dp, Color(0x7735A7FF), RoundedCornerShape(2.dp))
-                    .padding(horizontal = 1.dp, vertical = 0.5.dp)
-            ) {
-                Text(
-                    text = block.translated,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = fittedSp,
-                    lineHeight = (fittedValue * 1.05f).sp,
-                    maxLines = 10,
-                    overflow = TextOverflow.Clip
-                )
-            }
+            AutoFitTranslationBlock(
+                text = block.translated,
+                modifier = Modifier.offset(x, y).width(w).height(h)
+            )
         }
+    }
+}
+
+@Composable
+private fun AutoFitTranslationBlock(text: String, modifier: Modifier = Modifier) {
+    var fittedSize by remember(text) { mutableFloatStateOf(10f) }
+    Box(
+        modifier = modifier
+            .background(Color(0xF208101F), RoundedCornerShape(2.dp))
+            .border(0.5.dp, Color(0x6635A7FF), RoundedCornerShape(2.dp))
+            .padding(horizontal = 1.dp)
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = fittedSize.sp,
+            lineHeight = (fittedSize * 1.02f).sp,
+            maxLines = 12,
+            overflow = TextOverflow.Clip,
+            onTextLayout = { result ->
+                if (result.hasVisualOverflow && fittedSize > 2.6f) {
+                    fittedSize = (fittedSize - 0.35f).coerceAtLeast(2.6f)
+                }
+            }
+        )
     }
 }
 
