@@ -14,11 +14,15 @@ import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.Closeable
+import java.net.HttpURLConnection
+import java.net.URL
 
 class TranslationEngine(private val context: Context) : Closeable {
     private val recognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    private val translator: Translator = Translation.getClient(
+    private val fallbackTranslator: Translator = Translation.getClient(
         TranslatorOptions.Builder()
             .setSourceLanguage(TranslateLanguage.ENGLISH)
             .setTargetLanguage(TranslateLanguage.TURKISH)
@@ -26,55 +30,119 @@ class TranslationEngine(private val context: Context) : Closeable {
     )
 
     suspend fun prepareModel(wifiOnly: Boolean = false) = withContext(Dispatchers.IO) {
+        // Gemini 3.1 Flash-Lite ana çeviri motorudur. ML Kit yalnızca ağ yoksa yedek olarak hazırlanır.
         val builder = DownloadConditions.Builder()
         if (wifiOnly) builder.requireWifi()
-        Tasks.await(translator.downloadModelIfNeeded(builder.build()))
+        runCatching { Tasks.await(fallbackTranslator.downloadModelIfNeeded(builder.build())) }
     }
 
     suspend fun translateScreenshot(uri: Uri): TranslationResult = withContext(Dispatchers.IO) {
         val image = InputImage.fromFilePath(context, uri)
         val detected = Tasks.await(recognizer.process(image))
-        val overlays = mutableListOf<TranslationOverlayBlock>()
 
-        detected.textBlocks.forEach { block ->
-            val bounds = block.boundingBox ?: return@forEach
+        data class Candidate(
+            val left: Int,
+            val top: Int,
+            val right: Int,
+            val bottom: Int,
+            val source: String,
+        )
+
+        val candidates = detected.textBlocks.mapNotNull { block ->
+            val bounds = block.boundingBox ?: return@mapNotNull null
             val source = normalizeOcr(block.text)
                 .lineSequence()
                 .filterNot { isUiNoise(it) }
                 .joinToString("\n")
                 .trim()
-            if (!looksUseful(source)) return@forEach
-
-            val protectedText = GameGlossary.protect(source)
-            val raw = Tasks.await(translator.translate(protectedText.text))
-            val translated = polishGameTranslation(
-                source,
-                GameGlossary.restore(raw, protectedText.replacements)
-                    .replace(Regex("\\s+([,.!?;:])"), "$1")
-                    .replace(Regex("[ \\t]{2,}"), " ")
-                    .trim()
-            )
-            if (!looksUsefulTranslation(translated)) return@forEach
-
-            overlays += TranslationOverlayBlock(
+            if (!looksUseful(source)) return@mapNotNull null
+            Candidate(
                 left = bounds.left.coerceAtLeast(0),
                 top = bounds.top.coerceAtLeast(0),
                 right = bounds.right.coerceAtLeast(bounds.left + 1),
                 bottom = bounds.bottom.coerceAtLeast(bounds.top + 1),
                 source = source,
+            )
+        }.sortedWith(compareBy<Candidate> { it.top }.thenBy { it.left })
+
+        val geminiTranslations = translateBatchWithGemini(candidates.map { it.source })
+        val overlays = mutableListOf<TranslationOverlayBlock>()
+
+        candidates.forEachIndexed { index, candidate ->
+            val geminiText = geminiTranslations[index].orEmpty().trim()
+            val translated = if (geminiText.isNotBlank()) {
+                geminiText
+            } else if (geminiTranslations.isEmpty()) {
+                translateFallback(candidate.source)
+            } else {
+                ""
+            }
+            if (!looksUsefulTranslation(translated)) return@forEachIndexed
+            overlays += TranslationOverlayBlock(
+                left = candidate.left,
+                top = candidate.top,
+                right = candidate.right,
+                bottom = candidate.bottom,
+                source = candidate.source,
                 translated = translated,
             )
         }
 
-        val sorted = overlays.sortedWith(compareBy<TranslationOverlayBlock> { it.top }.thenBy { it.left })
         TranslationResult(
-            sourceText = sorted.joinToString("\n\n") { it.source },
-            translatedText = sorted.joinToString("\n\n") { it.translated },
-            hadText = sorted.isNotEmpty(),
-            overlays = sorted,
+            sourceText = overlays.joinToString("\n\n") { it.source },
+            translatedText = overlays.joinToString("\n\n") { it.translated },
+            hadText = overlays.isNotEmpty(),
+            overlays = overlays,
             imageWidth = image.width,
             imageHeight = image.height,
         )
+    }
+
+    private fun translateBatchWithGemini(sources: List<String>): Map<Int, String> {
+        if (sources.isEmpty()) return emptyMap()
+        return runCatching {
+            val blocks = JSONArray()
+            sources.forEach { source -> blocks.put(JSONObject().put("source", source)) }
+            val requestBody = JSONObject()
+                .put("mode", "blocks")
+                .put("blocks", blocks)
+
+            val connection = (URL(GEMINI_PROXY_URL).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 8_000
+                readTimeout = 20_000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("X-DraBornPortal-Client", "android")
+            }
+            connection.outputStream.use { it.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+            val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+            val responseText = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (connection.responseCode !in 200..299) error("Gemini HTTP ${connection.responseCode}")
+            val payload = JSONObject(responseText)
+            if (!payload.optBoolean("ok", false)) error("Gemini yanıtı geçersiz")
+            val items = payload.optJSONArray("items") ?: JSONArray()
+            buildMap {
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    val index = item.optInt("index", -1)
+                    val translated = item.optString("translated", "").trim()
+                    if (index >= 0 && translated.isNotBlank()) put(index, translated)
+                }
+            }
+        }.getOrElse { emptyMap() }
+    }
+
+    private fun translateFallback(source: String): String {
+        return runCatching {
+            val protectedText = GameGlossary.protect(source)
+            val raw = Tasks.await(fallbackTranslator.translate(protectedText.text))
+            GameGlossary.restore(raw, protectedText.replacements)
+                .replace(Regex("\\s+([,.!?;:])"), "$1")
+                .replace(Regex("[ \\t]{2,}"), " ")
+                .trim()
+        }.getOrDefault("")
     }
 
     private fun normalizeOcr(raw: String): String {
@@ -121,31 +189,19 @@ class TranslationEngine(private val context: Context) : Closeable {
         return letters.toFloat() / compact.length >= 0.55f
     }
 
-    private fun polishGameTranslation(source: String, fallback: String): String {
-        val key = source.lowercase().replace(Regex("\\s+"), " ").trim()
-        return when {
-            key == "dragon slayer" -> "Ejderha Avcısı"
-            key == "restless ghosts" || key == "restless ghost" -> "Huzursuz Hayaletler"
-            key == "growing pains" -> "Büyüme Sancıları"
-            key.contains("investigate the blue-flame door") && key.contains("swamp") ->
-                "Bataklıktaki mavi alevli kapıyı araştır. Cathan'ın ne yaptığını öğren."
-            key.contains("search for a purpose") && key.contains("amulet of ghostspeak") ->
-                "Ghostspeak Muskasının amacını araştır."
-            key.contains("grow and harvest your first crop") && key.contains("farming plot") ->
-                "Bir tarım alanında ilk mahsulünü yetiştir ve hasat et."
-            else -> fallback
-        }
-    }
-
     private fun looksUsefulTranslation(text: String): Boolean {
         if (text.isBlank()) return false
-        val letters = text.count { it.isLetter() }
-        return letters >= 2
+        return text.count { it.isLetter() } >= 2
     }
 
     override fun close() {
         recognizer.close()
-        translator.close()
+        fallbackTranslator.close()
+    }
+
+    companion object {
+        private const val GEMINI_PROXY_URL =
+            "https://guuwomvszlwhkmstewfl.supabase.co/functions/v1/dkd-portal-gemini-translate"
     }
 }
 
@@ -161,7 +217,6 @@ data class TranslationResult(
 data class ProtectedText(val text: String, val replacements: Map<String, String>)
 
 object GameGlossary {
-    // Yalnızca gerçek özel adları koruyoruz. Görev başlıkları v0.3'te artık Türkçeye çevrilir.
     private val protectedTerms = listOf(
         "PlayStation Portal", "PlayStation", "PSN", "RuneScape", "Dragonwilds",
         "Wise Old Man", "Ghostspeak", "Kettan", "Cathan", "Oculus", "Void"
