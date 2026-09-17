@@ -242,10 +242,10 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text("v0.4 • Gemini oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("v0.4.1 • DraBornEagle Oyun Çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsünü seç. Metin konumlarını cihaz içi OCR bulur; Gemini 3.1 Flash-Lite görevleri bağlama uygun Türkçeye tek seferde çevirir. Gereksiz menü ve kontrol yazıları filtrelenir.",
+                            "Ekran görüntüsünü seç. DraBornEagle Oyun Çevirisi görev metinlerini doğal Türkçeye dönüştürür ve görüntünün üzerinde doğru konumda gösterir.",
                             color = PortalText, fontSize = 16.sp, lineHeight = 24.sp
                         )
                         Spacer(Modifier.height(18.dp))
@@ -337,7 +337,7 @@ private fun HeroHeader() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 32.sp)
             Text(
-                "v0.4",
+                "v0.4.1",
                 color = Color(0xFF08101E),
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
@@ -351,7 +351,7 @@ private fun HeroHeader() {
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             MiniChip("CİHAZ İÇİ OCR", PortalBlue)
-            MiniChip("GEMINI 3.1", PortalCyan)
+            MiniChip("DRABORNEAGLE", PortalCyan)
             MiniChip("EN → TR", PortalPink)
         }
     }
@@ -466,7 +466,7 @@ private fun FullscreenTranslationViewer(
                     ZoomableOverlayScreenshot(bitmap, imageWidth, imageHeight, blocks, Modifier.fillMaxSize())
                     if (!showOriginal && blocks.isNotEmpty()) {
                         Text(
-                            "${blocks.size} ÇEVİRİ • Metin boyutu kutuya otomatik sığdırıldı",
+                            "${blocks.size} ÇEVİRİ • DraBornEagle Oyun Çevirisi",
                             color = PortalCyan,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -531,8 +531,16 @@ private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: L
         blocks.forEach { block ->
             val x = maxWidth * (block.left.toFloat() / imageWidth)
             val y = maxHeight * (block.top.toFloat() / imageHeight)
-            val w = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
-            val h = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
+            val originalW = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
+            val originalH = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
+            val sourceLength = block.source.filterNot { it.isWhitespace() }.length.coerceAtLeast(1)
+            val translatedLength = block.translated.filterNot { it.isWhitespace() }.length.coerceAtLeast(1)
+            val lengthRatio = translatedLength.toFloat() / sourceLength
+            val titleLike = block.source.length <= 42 && !block.source.contains(".") && !block.source.contains("?")
+            val widthFactor = if (titleLike) lengthRatio.coerceIn(1.08f, 1.48f) else 1.08f
+            val heightFactor = if (titleLike) 1.55f else lengthRatio.coerceIn(1.18f, 1.65f)
+            val w = (originalW * widthFactor).coerceAtMost((maxWidth - x).coerceAtLeast(originalW))
+            val h = (originalH * heightFactor).coerceAtMost((maxHeight - y).coerceAtLeast(originalH))
             AutoFitTranslationBlock(
                 text = block.translated,
                 modifier = Modifier.offset(x, y).width(w).height(h)
@@ -543,7 +551,7 @@ private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: L
 
 @Composable
 private fun AutoFitTranslationBlock(text: String, modifier: Modifier = Modifier) {
-    var fittedSize by remember(text) { mutableFloatStateOf(10f) }
+    var fittedSize by remember(text) { mutableFloatStateOf(10.5f) }
     Box(
         modifier = modifier
             .background(Color(0xF208101F), RoundedCornerShape(2.dp))
@@ -587,7 +595,7 @@ private fun StatusCard(modelState: ModelState, isTranslating: Boolean) {
                 Text(label, color = PortalText, fontWeight = FontWeight.Black, fontSize = 15.sp)
                 Text(detail, color = PortalMuted, fontSize = 12.sp)
             }
-            Text("GEMINI", color = accent, fontWeight = FontWeight.Black, fontSize = 11.sp)
+            Text("DRABORN AI", color = accent, fontWeight = FontWeight.Black, fontSize = 10.sp)
         }
     }
 }
