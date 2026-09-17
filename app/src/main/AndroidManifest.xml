@@ -6,6 +6,8 @@
 
     <application
         android:allowBackup="true"
+        android:icon="@drawable/dkd_portal_icon"
+        android:roundIcon="@drawable/dkd_portal_icon"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.DraBornPortal"
