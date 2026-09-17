@@ -242,10 +242,10 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text("v0.4.1 • DraBornEagle Oyun Çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("v0.4.1 • DrabornEagle Oyun Çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsünü seç. DraBornEagle Oyun Çevirisi görev metinlerini doğal Türkçeye dönüştürür ve görüntünün üzerinde doğru konumda gösterir.",
+                            "Ekran görüntüsünü seç. DrabornEagle Oyun Çevirisi görev metinlerini doğal Türkçeye dönüştürür ve görüntünün üzerinde doğru konumda gösterir.",
                             color = PortalText, fontSize = 16.sp, lineHeight = 24.sp
                         )
                         Spacer(Modifier.height(18.dp))
@@ -466,7 +466,7 @@ private fun FullscreenTranslationViewer(
                     ZoomableOverlayScreenshot(bitmap, imageWidth, imageHeight, blocks, Modifier.fillMaxSize())
                     if (!showOriginal && blocks.isNotEmpty()) {
                         Text(
-                            "${blocks.size} ÇEVİRİ • DraBornEagle Oyun Çevirisi",
+                            "${blocks.size} ÇEVİRİ • DrabornEagle Oyun Çevirisi",
                             color = PortalCyan,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
