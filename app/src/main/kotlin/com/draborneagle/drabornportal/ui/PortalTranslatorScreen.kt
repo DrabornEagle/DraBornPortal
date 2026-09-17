@@ -178,10 +178,10 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text("v0.3 • Akıllı oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("v0.3.1 • Hassas oyun çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsünü seç. Çeviri tamamlanınca görsele dokun; Türkçe metinler artık daha büyük, yüksek kontrastlı kartlarla açılır. İki parmakla yakınlaştırıp gezebilirsin.",
+                            "Ekran görüntüsünü seç. Çeviri tamamlanınca Türkçe metinler orijinal yazının bulunduğu alanın tam üzerine, aynı ölçülere yakın biçimde yerleşir. Gereksiz menü ve kontrol yazıları filtrelenir.",
                             color = PortalText, fontSize = 16.sp, lineHeight = 24.sp
                         )
                         Spacer(Modifier.height(18.dp))
@@ -273,7 +273,7 @@ private fun HeroHeader() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 32.sp)
             Text(
-                "v0.3",
+                "v0.3.1",
                 color = Color(0xFF08101E),
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
@@ -403,7 +403,7 @@ private fun FullscreenTranslationViewer(
                     ZoomableOverlayScreenshot(bitmap, imageWidth, imageHeight, blocks, Modifier.fillMaxSize())
                     if (!showOriginal && blocks.isNotEmpty()) {
                         Text(
-                            "${blocks.size} ÇEVİRİ • Kartlar okunabilir boyuta otomatik büyütüldü",
+                            "${blocks.size} ÇEVİRİ • Metinler orijinal alanların üzerine yerleştirildi",
                             color = PortalCyan,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -456,7 +456,6 @@ private fun ZoomableOverlayScreenshot(
         ) {
             Image(bitmap = bitmap, contentDescription = "Yakınlaştırılabilir oyun ekran görüntüsü", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
             if (blocks.isNotEmpty()) {
-                Box(Modifier.fillMaxSize().background(Color(0x26000000)))
                 TranslationOverlayLayer(imageWidth, imageHeight, blocks)
             }
         }
@@ -466,28 +465,34 @@ private fun ZoomableOverlayScreenshot(
 @Composable
 private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: List<TranslationOverlayBlock>) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        blocks.forEachIndexed { index, block ->
-            val rawX = maxWidth * (block.left.toFloat() / imageWidth)
-            val rawY = maxHeight * (block.top.toFloat() / imageHeight)
-            val originalWidth = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
-            val readableWidth = maxOf(originalWidth, maxWidth * 0.46f).coerceAtMost(maxWidth * 0.72f)
-            val safeX = rawX.coerceAtMost((maxWidth - readableWidth).coerceAtLeast(0.dp))
+        blocks.forEach { block ->
+            val x = maxWidth * (block.left.toFloat() / imageWidth)
+            val y = maxHeight * (block.top.toFloat() / imageHeight)
+            val w = maxWidth * ((block.right - block.left).toFloat() / imageWidth)
+            val h = maxHeight * ((block.bottom - block.top).toFloat() / imageHeight)
+            val chars = block.translated.length.coerceAtLeast(1)
+            val area = w.value.coerceAtLeast(2f) * h.value.coerceAtLeast(2f)
+            val byArea = kotlin.math.sqrt((area / chars) * 1.18f)
+            val byHeight = (h.value * 0.52f).coerceAtLeast(3.2f)
+            val fittedValue = minOf(byArea, byHeight, 11f).coerceAtLeast(3.2f)
+            val fittedSp = fittedValue.sp
 
-            Column(
-                modifier = Modifier.offset(safeX, rawY)
-                    .width(readableWidth)
-                    .background(Color(0xF20C1428), RoundedCornerShape(8.dp))
-                    .border(1.dp, if (index % 2 == 0) Color(0x9935A7FF) else Color(0x9945F2D0), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 7.dp, vertical = 5.dp)
+            Box(
+                modifier = Modifier.offset(x, y)
+                    .width(w)
+                    .height(h)
+                    .background(Color(0xEA08101F), RoundedCornerShape(2.dp))
+                    .border(0.5.dp, Color(0x7735A7FF), RoundedCornerShape(2.dp))
+                    .padding(horizontal = 1.dp, vertical = 0.5.dp)
             ) {
                 Text(
                     text = block.translated,
                     color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.5.sp,
-                    lineHeight = 15.5.sp,
-                    maxLines = 5,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = fittedSp,
+                    lineHeight = (fittedValue * 1.05f).sp,
+                    maxLines = 10,
+                    overflow = TextOverflow.Clip
                 )
             }
         }
