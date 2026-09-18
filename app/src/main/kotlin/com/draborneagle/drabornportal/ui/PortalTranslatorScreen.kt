@@ -242,10 +242,10 @@ private fun TranslatorScreen(incomingImageUri: Uri?) {
                     shape = RoundedCornerShape(26.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text("v0.4.1 • DrabornEagle Oyun Çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                        Text("v0.4.2 • DrabornEagle Oyun Çevirisi", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Ekran görüntüsünü seç. DrabornEagle Oyun Çevirisi görev metinlerini doğal Türkçeye dönüştürür ve görüntünün üzerinde doğru konumda gösterir.",
+                            "Ekran görüntüsünü seç. Android ve Web artık aynı DrabornEagle görüntü algılama ve oyun çeviri sistemini kullanır; Türkçe metinler aynı seçim ve konum mantığıyla gösterilir.",
                             color = PortalText, fontSize = 16.sp, lineHeight = 24.sp
                         )
                         Spacer(Modifier.height(18.dp))
@@ -337,7 +337,7 @@ private fun HeroHeader() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("DraBornPortal", color = PortalText, fontWeight = FontWeight.Black, fontSize = 32.sp)
             Text(
-                "v0.4.1",
+                "v0.4.2",
                 color = Color(0xFF08101E),
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
@@ -350,7 +350,7 @@ private fun HeroHeader() {
         Text("PLAY • CAPTURE • TÜRKÇE", color = PortalCyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            MiniChip("CİHAZ İÇİ OCR", PortalBlue)
+            MiniChip("GÖRSEL ALGILAMA", PortalBlue)
             MiniChip("DRABORNEAGLE", PortalCyan)
             MiniChip("EN → TR", PortalPink)
         }
@@ -537,14 +537,16 @@ private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: L
             val translatedLength = block.translated.filterNot { it.isWhitespace() }.length.coerceAtLeast(1)
             val lengthRatio = translatedLength.toFloat() / sourceLength
             val titleLike = block.source.length <= 42 && !block.source.contains(".") && !block.source.contains("?")
-            val widthFactor = if (titleLike) lengthRatio.coerceIn(1.08f, 1.48f) else 1.08f
-            val heightFactor = if (titleLike) 1.55f else lengthRatio.coerceIn(1.18f, 1.65f)
+            val widthFactor = if (titleLike) lengthRatio.coerceIn(1.08f, 1.50f) else 1.08f
+            val heightFactor = if (titleLike) 1.60f else lengthRatio.coerceIn(1.20f, 1.70f)
             val availableW = (maxWidth - x).coerceAtLeast(1.dp)
             val availableH = (maxHeight - y).coerceAtLeast(1.dp)
             val w = (originalW * widthFactor).coerceAtMost(availableW)
             val h = (originalH * heightFactor).coerceAtMost(availableH)
+            val preferredSize = (maxOf(originalH.value, h.value * 0.72f) * 0.62f).coerceIn(3f, 13f)
             AutoFitTranslationBlock(
                 text = block.translated,
+                initialFontSize = preferredSize,
                 modifier = Modifier.offset(x, y).width(w).height(h)
             )
         }
@@ -552,8 +554,8 @@ private fun TranslationOverlayLayer(imageWidth: Int, imageHeight: Int, blocks: L
 }
 
 @Composable
-private fun AutoFitTranslationBlock(text: String, modifier: Modifier = Modifier) {
-    var fittedSize by remember(text) { mutableFloatStateOf(10.5f) }
+private fun AutoFitTranslationBlock(text: String, initialFontSize: Float, modifier: Modifier = Modifier) {
+    var fittedSize by remember(text, initialFontSize) { mutableFloatStateOf(initialFontSize) }
     Box(
         modifier = modifier
             .background(Color(0xF208101F), RoundedCornerShape(2.dp))
@@ -580,8 +582,8 @@ private fun AutoFitTranslationBlock(text: String, modifier: Modifier = Modifier)
 @Composable
 private fun StatusCard(modelState: ModelState, isTranslating: Boolean) {
     val (label, detail, accent) = when {
-        isTranslating -> Triple("Oyun metinleri taranıyor", "OCR + Türkçe çeviri çalışıyor", PortalCyan)
-        modelState == ModelState.PREPARING -> Triple("Çeviri motoru hazırlanıyor", "İngilizce → Türkçe cihaz içi model", PortalBlue)
+        isTranslating -> Triple("Oyun metinleri taranıyor", "DrabornEagle görüntü algılama + Türkçe çeviri", PortalCyan)
+        modelState == ModelState.PREPARING -> Triple("Çeviri motoru hazırlanıyor", "DrabornEagle Oyun Çevirisi", PortalBlue)
         modelState == ModelState.READY -> Triple("Çeviri motoru hazır", "Görsel seç ve hemen Türkçeleştir", PortalCyan)
         else -> Triple("Çeviri modeli hazır değil", "Tekrar hazırlamayı dene", Color(0xFFFF8AAE))
     }
