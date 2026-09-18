@@ -11,7 +11,7 @@ android {
         applicationId = "com.draborneagle.drabornportal"
         minSdk = 23
         targetSdk = 36
-        versionCode = 3
+        versionCode = 1
         versionName = "0.4.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
